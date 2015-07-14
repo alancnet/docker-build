@@ -1,0 +1,119 @@
+#!/bin/bash
+
+# getHead list
+# Returns the head of a list.
+# Example: getHead "a b c d" -> "a"
+function getHead {
+    function headInt {
+        echo $1
+    }
+    headInt $1
+}
+
+# getTail list
+# Returns the tail of a list.
+# Example: getTail "a b c d" -> "b c d"
+function getTail {
+    function tailInt {
+        shift
+        echo $*
+    }
+    tailInt $1
+}
+
+# nameOf filename
+# Returns the name of a file without the extension.
+# Example: nameOf "build.dockerfile" -> "build"
+function nameOf {
+    echo ${1%.*}
+}
+
+# build dockerfile
+# Builds a docker image from a file, and names that image the same name of the file.
+# Example: build "build.dockerfile"
+function build {
+    echo
+    echo Building $1...
+    cat $1 | docker build -t="$(nameOf $1)" -
+}
+
+# getFrom dockerfile
+# Returns the value of the FROM clause from a dockerfile.
+# Example: getFrom "build.dockerfile" -> "ubuntu:trusty"
+function getFrom {
+    grep "FROM " $1 | tail -c+6
+}
+
+# contains list element
+# Determines if element exists in list.
+# Example: contains "a b c d" "c" -> true
+#          contains "a b c d" "z" -> false
+function contains {
+    local list=$1
+    local element=$2
+
+    local head=$(getHead "$list")
+    local tail=$(getTail "$list")
+    if [ "$element" == "$head" ]; then
+        true
+    elif [ "$head" == "" ]; then
+        false
+    else
+        contains "$tail" "$element"
+    fi
+}
+
+# remove list element
+# Returns a list with element removed.
+# Example: remove "a b c d" "c" -> "a b d"
+function remove {
+    local list=$1
+    local element=$2
+
+    local head=$(getHead "$list")
+    local tail=$(getTail "$list")
+    if [ "$element" != "$head" ]; then
+        echo $head
+    fi
+    if [ "$head" != "" ]; then
+        remove "$tail" "$element"
+    fi
+}
+
+# buildOrder listOfDockerfiles
+# Returns the proper build order of dockerfiles ensuring dependencies are built first.
+# Example: buildOrder "bar.dockerfile foo.dockerfile" -> "foo.dockerfile bar.dockerfile"
+function buildOrder {
+    local head=$(getHead "$1")
+    local tail=$(getTail "$1")
+    if [ "$head" != "" ]; then
+        local from=$(getFrom "$head").dockerfile
+        if contains "$tail" "$from"; then
+            buildOrder "$from $head $(remove "$tail" "$from")"
+        else
+            echo $head
+            buildOrder "$tail"
+        fi
+    fi
+}
+
+
+function forEach {
+    local array=$1
+    local callback=$2
+    local head=$(getHead "$array")
+    local tail=$(getTail "$array")
+
+    if [ "$head" != "" ]; then
+        $callback $head
+        forEach "$tail" "$callback"
+    fi
+}
+
+function main {
+    local list="$(ls *.dockerfile)"
+    local order=$(buildOrder "$list")
+    forEach "$order" build
+}
+
+main
