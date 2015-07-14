@@ -30,6 +30,7 @@ CMD cat log
 ```
 
 Running `docker-build` will build these images in the following order
+
 1. foo.dockerfile
 2. bar.dockerfile
 3. diz.dockerfile
